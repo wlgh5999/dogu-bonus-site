@@ -248,7 +248,7 @@
             <div class="big">파일을 여기에 끌어놓거나 선택하세요</div>
             <div class="small">.hwpx, .hwp, .pdf, .png, .jpg, .jpeg, .webp</div>
           </div>
-          <input id="fileInput" type="file" accept=".hwpx,.hwp,.pdf,image/*" multiple hidden />
+          <input id="fileInput" type="file" accept=".hwpx,.hwp,.pdf,image/*" multiple style="display:block;width:100%;margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:14px;background:#fff;" />
           <div class="btn-row">
             <button class="secondary" id="pickBtn">파일 선택</button>
             <button class="primary" id="analyzeBtn">집계 시작</button>
@@ -334,7 +334,16 @@
   </div>
 
 <script>
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.worker.min.js';
+  window.__libs = {
+    xlsx: typeof window.XLSX !== 'undefined',
+    pdf: typeof window.pdfjsLib !== 'undefined',
+    zip: typeof window.JSZip !== 'undefined',
+    ocr: typeof window.Tesseract !== 'undefined'
+  };
+
+  if (window.__libs.pdf && window.pdfjsLib?.GlobalWorkerOptions) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.worker.min.js';
+  }
 
   const state = {
     files: [],
@@ -472,11 +481,13 @@
   }
 
   async function runOCR(imageLike) {
+    if (!window.__libs.ocr) throw new Error('OCR 라이브러리를 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.');
     const { data } = await Tesseract.recognize(imageLike, 'kor+eng');
     return data.text || '';
   }
 
   async function parsePDF(file) {
+    if (!window.__libs.pdf) throw new Error('PDF 라이브러리를 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.');
     const buf = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
     let text = '';
@@ -515,6 +526,7 @@
   }
 
   async function parseHWPX(file) {
+    if (!window.__libs.zip) throw new Error('HWPX 라이브러리를 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.');
     const zip = await JSZip.loadAsync(await file.arrayBuffer());
     const targets = Object.keys(zip.files).filter(name => /section\d+\.xml$|header\.xml$|contents\/section/i.test(name));
     let text = '';
@@ -709,6 +721,10 @@
   }
 
   function downloadExcel() {
+    if (!window.__libs.xlsx) {
+      alert('엑셀 라이브러리를 아직 불러오지 못했습니다. 잠시 후 다시 시도하거나 새로고침해 주세요.');
+      return;
+    }
     if (!state.results.length) {
       alert('먼저 집계 결과를 만든 뒤 다운로드해 주세요.');
       return;
@@ -787,6 +803,18 @@
   });
   els.dropzone.addEventListener('drop', (e) => setFiles(e.dataTransfer.files));
 
+  const missing = [];
+  if (!window.__libs.xlsx) missing.push('엑셀');
+  if (!window.__libs.pdf) missing.push('PDF');
+  if (!window.__libs.zip) missing.push('HWPX');
+  if (!window.__libs.ocr) missing.push('OCR');
+  if (missing.length) {
+    log('일부 라이브러리를 불러오지 못했습니다: ' + missing.join(', '));
+    log('버튼은 사용할 수 있으며, 해당 기능만 제한됩니다.');
+    setStatus('부분 동작');
+  } else {
+    setStatus('준비 완료');
+  }
   log('업로드 대기 중');
 </script>
 </body>
