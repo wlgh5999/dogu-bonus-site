@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>사단법인 도구 | 신청서 자동 집계</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    :root {
+      --bg: #f7f4ea;
+      --bg-soft: #fcfaf4;
+      --surface: #ffffff;
+      --line: #e5ddcb;
+      --text: #243125;
+      --muted: #6f776a;
+      --primary: #6c8f43;
+      --primary-deep: #4e6f2c;
+      --primary-soft: #edf5df;
+      --accent: #f0c45c;
+      --accent-soft: #fff3d4;
+      --danger: #b94b36;
+      --ok: #227c45;
+      --shadow: 0 18px 50px rgba(40, 49, 31, .08);
+      --radius-xl: 28px;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Pretendard", "Noto Sans KR", system-ui, sans-serif;
+      background:
+        radial-gradient(circle at top right, rgba(240,196,92,.18), transparent 20%),
+        radial-gradient(circle at left top, rgba(108,143,67,.10), transparent 25%),
+        linear-gradient(180deg, #f9f6ef 0%, #f5f1e5 100%);
+      color: var(--text);
+    }
+    .wrap { max-width: 1280px; margin: 0 auto; padding: 28px 18px 72px; }
+    .hero {
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg, #ffffff 0%, #faf6ea 55%, #eef5de 100%);
+      border: 1px solid rgba(108,143,67,.14);
+      box-shadow: var(--shadow);
+      border-radius: 32px;
+      padding: 32px;
+      display: grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 24px;
+    }
+    .hero::after {
+      content: "";
+      position: absolute;
+      right: -50px;
+      top: -60px;
+      width: 240px;
+      height: 240px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(108,143,67,.18), rgba(108,143,67,0));
+      pointer-events: none;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--primary-soft);
+      color: var(--primary-deep);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+    }
+    .hero h1 {
+      margin: 14px 0 10px;
+      font-size: 36px;
+      line-height: 1.22;
+      letter-spacing: -.03em;
+    }
+    .hero p {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.75;
+      color: var(--muted);
+      max-width: 720px;
+    }
+    .hero-card {
+      align-self: stretch;
+      background: rgba(255,255,255,.78);
+      border: 1px solid rgba(108,143,67,.14);
+      border-radius: 24px;
+      padding: 22px;
+      backdrop-filter: blur(10px);
+    }
+    .hero-card h3 { margin: 0 0 12px; font-size: 17px; }
+    .mini-grid { display: grid; gap: 12px; }
+    .mini-item {
+      padding: 12px 14px;
+      background: var(--bg-soft);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+    .mini-item strong { display: block; font-size: 14px; margin-bottom: 4px; }
+    .mini-item span { color: var(--muted); font-size: 13px; line-height: 1.55; }
+
+    .layout { display: grid; grid-template-columns: 340px 1fr; gap: 22px; margin-top: 22px; }
+    .panel {
+      background: rgba(255,255,255,.86);
+      border: 1px solid rgba(108,143,67,.14);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow);
+    }
+    .sidebar { padding: 22px; position: sticky; top: 16px; height: fit-content; }
+    .panel-title { margin: 0 0 16px; font-size: 19px; letter-spacing: -.02em; }
+    .section + .section { margin-top: 18px; padding-top: 18px; border-top: 1px dashed var(--line); }
+    label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 8px; color: #445145; }
+    input[type="number"], input[type="text"] {
+      width: 100%; padding: 13px 14px; border-radius: 14px; border: 1px solid var(--line);
+      font: inherit; background: #fff; color: var(--text); outline: none;
+    }
+    input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(108,143,67,.12); }
+    .hint { font-size: 12px; line-height: 1.55; color: var(--muted); margin-top: 7px; }
+    .dropzone {
+      border: 1.7px dashed rgba(108,143,67,.38);
+      border-radius: 18px; padding: 22px; text-align: center; background: linear-gradient(180deg, #fff, #fbf8f0);
+      transition: .2s ease;
+    }
+    .dropzone.drag { background: #f4fbe8; border-color: var(--primary); transform: translateY(-1px); }
+    .dropzone .big { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .dropzone .small { color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .btn-row { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; margin-top: 12px; }
+    button, .file-btn {
+      appearance: none; border: 0; border-radius: 14px; padding: 13px 16px; font: inherit; font-weight: 700; cursor: pointer;
+      transition: transform .15s ease, box-shadow .2s ease, opacity .2s ease;
+    }
+    button:hover, .file-btn:hover { transform: translateY(-1px); }
+    .primary { background: linear-gradient(135deg, var(--primary) 0%, var(--primary-deep) 100%); color: #fff; box-shadow: 0 10px 24px rgba(78,111,44,.22); }
+    .secondary { background: #fff; color: var(--text); border: 1px solid var(--line); }
+    .ghost { background: var(--accent-soft); color: #6d5311; }
+    .full { width: 100%; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    .status {
+      display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; font-size:12px; font-weight:700;
+      background:#fff8e7; color:#7f5c10; border:1px solid #f2dfaa;
+    }
+    .content { padding: 22px; }
+    .stats { display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+    .stat {
+      background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(252,250,244,.95));
+      border: 1px solid var(--line); border-radius: 18px; padding: 18px;
+    }
+    .stat .num { font-size: 28px; font-weight: 800; letter-spacing: -.04em; margin-top: 8px; }
+    .stat .label { font-size: 13px; color: var(--muted); }
+    .table-card { border:1px solid var(--line); border-radius: 20px; overflow:hidden; background:#fff; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { padding: 13px 12px; text-align: left; border-bottom: 1px solid #efe8d8; font-size: 13px; vertical-align: top; }
+    th { background: #fbf8f0; font-size: 12px; color: #566258; font-weight: 800; position: sticky; top: 0; z-index: 1; }
+    tr:hover td { background: #fffcf4; }
+    .scroll { max-height: 420px; overflow: auto; }
+    .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:700; }
+    .chip.ok { color: var(--ok); background: #e8f6ed; }
+    .chip.no { color: #7b837b; background: #f0f2ef; }
+    .chip.warn { color: #8b5a12; background: #fff4da; }
+    .notice {
+      margin-top: 14px; background: #fffaf0; border: 1px solid #f0dfb6; color: #6a5417;
+      padding: 14px 16px; border-radius: 16px; font-size: 13px; line-height: 1.65;
+    }
+    .log { margin-top: 14px; background: #243125; color: #e6f3e2; padding: 14px; border-radius: 16px; font-size: 12px; line-height: 1.7; height: 180px; overflow: auto; white-space: pre-wrap; }
+    .footer-note { margin-top: 18px; color: var(--muted); font-size: 12px; line-height: 1.75; }
+    .right-actions { display:flex; gap:10px; flex-wrap: wrap; }
+    .subhead { margin: 24px 0 10px; font-size: 18px; }
+    .muted { color: var(--muted); }
+    .empty {
+      padding: 44px 18px; text-align: center; color: var(--muted); background: linear-gradient(180deg, #fff, #fbfaf6);
+      border-radius: 20px;
+    }
+    @media (max-width: 1024px) {
+      .hero { grid-template-columns: 1fr; }
+      .layout { grid-template-columns: 1fr; }
+      .sidebar { position: static; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .wrap { padding: 16px 12px 60px; }
+      .hero { padding: 22px; border-radius: 24px; }
+      .hero h1 { font-size: 28px; }
+      .content, .sidebar { padding: 16px; }
+      .stats { grid-template-columns: 1fr; }
+      .btn-row { grid-template-columns: 1fr; }
+      .topbar { flex-direction: column; align-items: stretch; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">사단법인 도구 신청서 집계 사이트</div>
+        <h1>나다움을 온전히 누리는<br>아동 지원사업 심사를 위한 자동 집계</h1>
+        <p>
+          KB국민은행 아동·청소년 어린이날 지원사업 신청서 양식에 맞춰 <strong>기관명</strong>과
+          <strong>신청 아동 인원 총( )명</strong>을 자동 추출하고, 기관별 합산과 가산점을 한 번에 계산합니다.
+          사단법인 도구의 미션·비전 페이지에 나온 ‘나다움’과 ‘아동을 주체로 보는 관점’을 반영해,
+          따뜻하고 안정적인 운영 화면으로 구성했습니다.
+        </p>
+      </div>
+      <aside class="hero-card">
+        <h3>지원 파일 형식</h3>
+        <div class="mini-grid">
+          <div class="mini-item"><strong>HWPX</strong><span>가장 안정적입니다. ZIP+XML 구조라 양식 인식이 잘 됩니다.</span></div>
+          <div class="mini-item"><strong>PDF</strong><span>텍스트 PDF는 빠르게 처리되고, 스캔 PDF는 OCR이 동작합니다.</span></div>
+          <div class="mini-item"><strong>이미지</strong><span>JPG, PNG, WEBP 등 스캔본 OCR 지원</span></div>
+          <div class="mini-item"><strong>HWP</strong><span>브라우저 내 JS 파서를 우선 시도하며, 실패 시 변환 안내를 표시합니다.</span></div>
+        </div>
+      </aside>
+    </section>
+
+    <div class="layout">
+      <aside class="panel sidebar">
+        <h2 class="panel-title">설정</h2>
+
+        <div class="section">
+          <label for="threshold">가산점 기준 인원</label>
+          <input id="threshold" type="number" value="30" min="1" />
+          <div class="hint">기관별 신청 아동 인원 총합이 이 숫자를 초과하면 가산점을 부여합니다.</div>
+        </div>
+
+        <div class="section">
+          <label for="bonus">가산점</label>
+          <input id="bonus" type="number" value="5" min="0" />
+          <div class="hint">예: 30명 초과 시 5점</div>
+        </div>
+
+        <div class="section">
+          <label for="normalizeWords">기관명 정규화(선택)</label>
+          <input id="normalizeWords" type="text" value="복지관, 지역아동센터, 센터" />
+          <div class="hint">공백·괄호·특수문자 제거 후 비교합니다. 자주 쓰는 기관 유형 키워드를 참고용으로 둘 수 있습니다.</div>
+        </div>
+
+        <div class="section">
+          <div id="dropzone" class="dropzone">
+            <div class="big">파일을 여기에 끌어놓거나 선택하세요</div>
+            <div class="small">.hwpx, .hwp, .pdf, .png, .jpg, .jpeg, .webp</div>
+          </div>
+          <input id="fileInput" type="file" accept=".hwpx,.hwp,.pdf,image/*" multiple hidden />
+          <div class="btn-row">
+            <button class="secondary" id="pickBtn">파일 선택</button>
+            <button class="primary" id="analyzeBtn">집계 시작</button>
+          </div>
+          <button class="ghost full" id="sampleBtn" style="margin-top:10px;">샘플 데이터 넣기</button>
+        </div>
+
+        <div class="notice">
+          <strong>HWP 지원 안내</strong><br>
+          브라우저 환경에서는 <code>.hwp</code> 파싱 성공률이 파일 버전과 보안 설정에 따라 달라질 수 있습니다.
+          이 버전은 JS 파서를 먼저 시도하고, 실패한 파일은 목록에 따로 표시합니다.
+          중요한 심사 건은 가능하면 <strong>HWPX나 PDF로 변환</strong>해 업로드하는 것이 가장 안전합니다.
+        </div>
+
+        <div id="log" class="log">준비 완료</div>
+        <div class="footer-note">
+          단일 HTML 페이지이며, 외부 라이브러리(PDF/OCR/엑셀/HWP 파서)를 불러오기 위해 인터넷 연결이 필요합니다.
+        </div>
+      </aside>
+
+      <main class="panel content">
+        <div class="topbar">
+          <div>
+            <h2 class="panel-title" style="margin:0 0 6px;">집계 결과</h2>
+            <div class="muted" id="summaryText">아직 파일이 업로드되지 않았습니다.</div>
+          </div>
+          <div class="right-actions">
+            <span class="status" id="engineStatus">대기 중</span>
+            <button class="secondary" id="downloadBtn">엑셀 다운로드</button>
+          </div>
+        </div>
+
+        <section class="stats">
+          <div class="stat"><div class="label">업로드 파일 수</div><div class="num" id="statFiles">0</div></div>
+          <div class="stat"><div class="label">인식 성공</div><div class="num" id="statParsed">0</div></div>
+          <div class="stat"><div class="label">가산점 기관 수</div><div class="num" id="statBonusOrgs">0</div></div>
+          <div class="stat"><div class="label">총 신청 인원</div><div class="num" id="statPeople">0</div></div>
+        </section>
+
+        <h3 class="subhead">파일별 추출 결과</h3>
+        <div class="table-card">
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 20%;">파일명</th>
+                  <th style="width: 18%;">형식</th>
+                  <th style="width: 20%;">기관명</th>
+                  <th style="width: 12%;">신청 인원</th>
+                  <th style="width: 14%;">기관 총합</th>
+                  <th style="width: 10%;">가산점</th>
+                  <th style="width: 12%;">상태</th>
+                </tr>
+              </thead>
+              <tbody id="fileTableBody">
+                <tr><td colspan="7"><div class="empty">업로드 후 ‘집계 시작’을 누르면 결과가 표시됩니다.</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <h3 class="subhead">기관별 합산</h3>
+        <div class="table-card">
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>기관명</th>
+                  <th>건수</th>
+                  <th>신청 인원 합계</th>
+                  <th>가산점 여부</th>
+                  <th>비고</th>
+                </tr>
+              </thead>
+              <tbody id="orgTableBody">
+                <tr><td colspan="5"><div class="empty">기관별 합산 결과가 여기에 표시됩니다.</div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.3.136/pdf.worker.min.js';
+
+  const state = {
+    files: [],
+    results: [],
+    hwpModule: null,
+  };
+
+  const $ = (sel) => document.querySelector(sel);
+  const els = {
+    fileInput: $('#fileInput'),
+    pickBtn: $('#pickBtn'),
+    analyzeBtn: $('#analyzeBtn'),
+    downloadBtn: $('#downloadBtn'),
+    sampleBtn: $('#sampleBtn'),
+    dropzone: $('#dropzone'),
+    log: $('#log'),
+    summaryText: $('#summaryText'),
+    fileTableBody: $('#fileTableBody'),
+    orgTableBody: $('#orgTableBody'),
+    engineStatus: $('#engineStatus'),
+    threshold: $('#threshold'),
+    bonus: $('#bonus'),
+    statFiles: $('#statFiles'),
+    statParsed: $('#statParsed'),
+    statBonusOrgs: $('#statBonusOrgs'),
+    statPeople: $('#statPeople'),
+  };
+
+  function log(msg) {
+    const ts = new Date().toLocaleTimeString('ko-KR', { hour12: false });
+    els.log.textContent += `\n[${ts}] ${msg}`;
+    els.log.scrollTop = els.log.scrollHeight;
+  }
+
+  function setStatus(text) { els.engineStatus.textContent = text; }
+
+  function normalizeOrgName(raw) {
+    if (!raw) return '';
+    return raw
+      .replace(/기관명\s*[:：]?/g, '')
+      .replace(/[\[\]<>]/g, '')
+      .replace(/[()（）]/g, ' ')
+      .replace(/["'`]/g, '')
+      .replace(/[\t\r\n]+/g, ' ')
+      .replace(/[|]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function canonicalOrgName(raw) {
+    return normalizeOrgName(raw)
+      .replace(/\s+/g, '')
+      .replace(/[ㆍ·‧∙]/g, '')
+      .replace(/[.,]/g, '')
+      .trim()
+      .toLowerCase();
+  }
+
+  function extractOrgName(text) {
+    const lines = text.split(/\n+/).map(v => v.trim()).filter(Boolean);
+    const candidates = [];
+
+    const patterns = [
+      /기관명\s*[:：]?\s*([^\n]+)/i,
+      /기관\s*정보[\s\S]{0,120}?기관명\s*[:：]?\s*([^\n]+)/i,
+      /기관명\s*([^\n]+?)\s*(?:기관장명|기관\s*연락처|기관\s*이메일|주소|고유번호증)/i,
+      /^(.*?(?:복지관|지역아동센터|아동센터|청소년센터|센터|학교|기관|협회|재단|법인))$/m,
+    ];
+
+    for (const p of patterns) {
+      const m = text.match(p);
+      if (m && m[1]) candidates.push(m[1]);
+    }
+
+    for (let i = 0; i < lines.length; i++) {
+      if (/^기관명$/.test(lines[i]) && lines[i + 1]) candidates.push(lines[i + 1]);
+      if (/기관명/.test(lines[i]) && /복지관|센터|학교|협회|재단|법인/.test(lines[i])) candidates.push(lines[i]);
+    }
+
+    const cleaned = candidates
+      .map(v => normalizeOrgName(v))
+      .map(v => v.replace(/(?:기관장명|기관 연락처|기관 이메일|고유번호증 번호).*$/,'').trim())
+      .filter(v => v && v.length >= 2 && !/^기관명$/i.test(v));
+
+    return cleaned[0] || '';
+  }
+
+  function extractApplicantCount(text) {
+    const compact = text.replace(/\s+/g, ' ');
+    const patterns = [
+      /신청\s*아동\s*인원\s*총\s*\(?\s*(\d{1,4})\s*\)?\s*명/i,
+      /신청\s*아동\s*인원[\s\S]{0,50}?총\s*\(?\s*(\d{1,4})\s*\)?\s*명/i,
+      /총\s*\(?\s*(\d{1,4})\s*\)?\s*명[\s\S]{0,30}?미취학/i,
+      /참여자\s*정보[\s\S]{0,200}?1\s*2\s*3\s*4\s*5\s*6\s*7\s*8\s*9\s*10/i,
+    ];
+
+    for (const p of patterns) {
+      const m = compact.match(p);
+      if (m && m[1]) return Number(m[1]);
+    }
+
+    const lineMatch = text.split(/\n+/).find(line => /신청\s*아동\s*인원/.test(line) && /총/.test(line) && /명/.test(line));
+    if (lineMatch) {
+      const m = lineMatch.match(/총\s*\(?\s*(\d{1,4})\s*\)?\s*명/);
+      if (m) return Number(m[1]);
+    }
+
+    return null;
+  }
+
+  function inferRecord(text, fileName, fileType) {
+    const orgName = extractOrgName(text);
+    const applicantCount = extractApplicantCount(text);
+    const issues = [];
+    if (!orgName) issues.push('기관명 인식 실패');
+    if (applicantCount === null) issues.push('신청 인원 인식 실패');
+    return {
+      fileName,
+      fileType,
+      orgName,
+      applicantCount,
+      status: issues.length ? '검토 필요' : '인식 완료',
+      issues: issues.join(', '),
+      rawText: text,
+    };
+  }
+
+  async function fileToImageDataURL(file) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result);
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    });
+  }
+
+  async function runOCR(imageLike) {
+    const { data } = await Tesseract.recognize(imageLike, 'kor+eng');
+    return data.text || '';
+  }
+
+  async function parsePDF(file) {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    let text = '';
+    for (let p = 1; p <= Math.min(pdf.numPages, 5); p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      const pageText = content.items.map(item => item.str).join(' ');
+      text += `\n${pageText}`;
+    }
+    if (text.replace(/\s+/g,'').length >= 20) return text;
+
+    log(`${file.name}: 텍스트 PDF가 아니라 OCR로 재시도합니다.`);
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 2.0 });
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    return await runOCR(canvas);
+  }
+
+  async function parseImage(file) {
+    const dataUrl = await fileToImageDataURL(file);
+    return await runOCR(dataUrl);
+  }
+
+  function xmlToText(xmlStr) {
+    return xmlStr
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  async function parseHWPX(file) {
+    const zip = await JSZip.loadAsync(await file.arrayBuffer());
+    const targets = Object.keys(zip.files).filter(name => /section\d+\.xml$|header\.xml$|contents\/section/i.test(name));
+    let text = '';
+    for (const name of targets) {
+      const xml = await zip.files[name].async('string');
+      text += '\n' + xmlToText(xml);
+    }
+    return text;
+  }
+
+  async function getHwpModule() {
+    if (state.hwpModule) return state.hwpModule;
+    try {
+      state.hwpModule = await import('https://cdn.jsdelivr.net/npm/@ohah/hwpjs/+esm');
+      log('HWP 웹 파서를 불러왔습니다.');
+      return state.hwpModule;
+    } catch (e) {
+      log('HWP 웹 파서를 불러오지 못했습니다.');
+      return null;
+    }
+  }
+
+  async function parseHWP(file) {
+    const mod = await getHwpModule();
+    if (!mod) throw new Error('HWP 파서 로드 실패');
+    const arr = new Uint8Array(await file.arrayBuffer());
+
+    // 여러 API 형태를 순차 시도
+    const candidates = [
+      async () => mod.extractText ? await mod.extractText(arr) : null,
+      async () => mod.parseText ? await mod.parseText(arr) : null,
+      async () => mod.toText ? await mod.toText(arr) : null,
+      async () => mod.default?.extractText ? await mod.default.extractText(arr) : null,
+      async () => mod.default?.parseText ? await mod.default.parseText(arr) : null,
+      async () => mod.default?.toText ? await mod.default.toText(arr) : null,
+      async () => {
+        if (mod.HwpDocument) {
+          const doc = new mod.HwpDocument(arr);
+          if (typeof doc.getText === 'function') return await doc.getText();
+          if (typeof doc.text === 'function') return await doc.text();
+        }
+        return null;
+      }
+    ];
+
+    for (const fn of candidates) {
+      try {
+        const out = await fn();
+        if (typeof out === 'string' && out.trim()) return out;
+        if (out && typeof out.text === 'string') return out.text;
+      } catch (_) {}
+    }
+
+    throw new Error('지원되는 HWP 텍스트 추출 함수를 찾지 못했습니다.');
+  }
+
+  async function parseFile(file) {
+    const name = file.name;
+    const lower = name.toLowerCase();
+    let text = '';
+    let fileType = '';
+
+    if (lower.endsWith('.hwpx')) {
+      fileType = 'HWPX';
+      text = await parseHWPX(file);
+    } else if (lower.endsWith('.hwp')) {
+      fileType = 'HWP';
+      text = await parseHWP(file);
+    } else if (lower.endsWith('.pdf')) {
+      fileType = 'PDF';
+      text = await parsePDF(file);
+    } else if (file.type.startsWith('image/') || /\.(png|jpg|jpeg|webp)$/i.test(lower)) {
+      fileType = '이미지';
+      text = await parseImage(file);
+    } else {
+      throw new Error('지원하지 않는 형식');
+    }
+
+    return inferRecord(text, name, fileType);
+  }
+
+  function render(results) {
+    const threshold = Number(els.threshold.value || 30);
+    const bonus = Number(els.bonus.value || 5);
+    const valid = results.filter(r => r.orgName && Number.isFinite(r.applicantCount));
+
+    const orgMap = new Map();
+    valid.forEach(r => {
+      const key = canonicalOrgName(r.orgName);
+      if (!orgMap.has(key)) orgMap.set(key, { displayName: normalizeOrgName(r.orgName), count: 0, total: 0, files: [] });
+      const row = orgMap.get(key);
+      row.count += 1;
+      row.total += Number(r.applicantCount || 0);
+      row.files.push(r.fileName);
+    });
+
+    results.forEach(r => {
+      const key = canonicalOrgName(r.orgName);
+      const org = orgMap.get(key);
+      r.orgTotal = org ? org.total : null;
+      r.bonusPoint = org && org.total > threshold ? bonus : 0;
+    });
+
+    const bonusOrgCount = [...orgMap.values()].filter(v => v.total > threshold).length;
+    const people = [...orgMap.values()].reduce((a, b) => a + b.total, 0);
+    const parsed = results.filter(r => r.status === '인식 완료').length;
+
+    els.statFiles.textContent = String(state.files.length);
+    els.statParsed.textContent = String(parsed);
+    els.statBonusOrgs.textContent = String(bonusOrgCount);
+    els.statPeople.textContent = String(people);
+    els.summaryText.textContent = `총 ${state.files.length}개 파일 중 ${parsed}개가 자동 인식되었습니다. 기관 ${orgMap.size}곳, 총 신청 인원 ${people}명입니다.`;
+
+    if (!results.length) {
+      els.fileTableBody.innerHTML = '<tr><td colspan="7"><div class="empty">업로드 후 결과가 여기에 표시됩니다.</div></td></tr>';
+    } else {
+      els.fileTableBody.innerHTML = results.map(r => {
+        const chip = r.status === '인식 완료'
+          ? '<span class="chip ok">인식 완료</span>'
+          : '<span class="chip warn">검토 필요</span>';
+        return `
+          <tr>
+            <td>${escapeHtml(r.fileName)}</td>
+            <td>${escapeHtml(r.fileType)}</td>
+            <td>${escapeHtml(r.orgName || '-')}</td>
+            <td>${r.applicantCount ?? '-'}</td>
+            <td>${r.orgTotal ?? '-'}</td>
+            <td>${r.bonusPoint || 0}</td>
+            <td>${chip}${r.issues ? `<div class="hint">${escapeHtml(r.issues)}</div>` : ''}</td>
+          </tr>`;
+      }).join('');
+    }
+
+    const orgRows = [...orgMap.values()].sort((a, b) => b.total - a.total);
+    if (!orgRows.length) {
+      els.orgTableBody.innerHTML = '<tr><td colspan="5"><div class="empty">기관별 집계 결과가 없습니다.</div></td></tr>';
+    } else {
+      els.orgTableBody.innerHTML = orgRows.map(row => {
+        const isBonus = row.total > threshold;
+        return `
+          <tr>
+            <td>${escapeHtml(row.displayName)}</td>
+            <td>${row.count}</td>
+            <td>${row.total}</td>
+            <td>${isBonus ? `<span class="chip ok">+${bonus}점</span>` : `<span class="chip no">없음</span>`}</td>
+            <td class="muted">${isBonus ? `${threshold}명 초과` : `${threshold}명 이하`}</td>
+          </tr>`;
+      }).join('');
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  async function analyze() {
+    if (!state.files.length) {
+      alert('먼저 파일을 업로드해 주세요.');
+      return;
+    }
+    els.log.textContent = '분석 시작';
+    setStatus('분석 중');
+    const results = [];
+    for (const file of state.files) {
+      try {
+        log(`${file.name} 처리 중...`);
+        const record = await parseFile(file);
+        results.push(record);
+        log(`${file.name} 완료: 기관=${record.orgName || '-'}, 인원=${record.applicantCount ?? '-'}`);
+      } catch (err) {
+        results.push({
+          fileName: file.name,
+          fileType: file.name.split('.').pop().toUpperCase(),
+          orgName: '',
+          applicantCount: null,
+          status: '검토 필요',
+          issues: err?.message || '처리 실패',
+          rawText: '',
+        });
+        log(`${file.name} 실패: ${err?.message || err}`);
+      }
+      render(results);
+      await new Promise(r => setTimeout(r, 50));
+    }
+    state.results = results;
+    setStatus('분석 완료');
+  }
+
+  function downloadExcel() {
+    if (!state.results.length) {
+      alert('먼저 집계 결과를 만든 뒤 다운로드해 주세요.');
+      return;
+    }
+    const threshold = Number(els.threshold.value || 30);
+    const bonus = Number(els.bonus.value || 5);
+
+    const detail = state.results.map(r => ({
+      파일명: r.fileName,
+      형식: r.fileType,
+      기관명: r.orgName || '',
+      신청인원: r.applicantCount ?? '',
+      기관총합: r.orgTotal ?? '',
+      가산점: r.bonusPoint || 0,
+      상태: r.status,
+      비고: r.issues || '',
+    }));
+
+    const grouped = {};
+    state.results.forEach(r => {
+      if (!r.orgName || !Number.isFinite(r.applicantCount)) return;
+      const key = canonicalOrgName(r.orgName);
+      grouped[key] ??= { 기관명: normalizeOrgName(r.orgName), 신청건수: 0, 신청인원합계: 0 };
+      grouped[key].신청건수 += 1;
+      grouped[key].신청인원합계 += Number(r.applicantCount);
+    });
+    const summary = Object.values(grouped).map(row => ({
+      ...row,
+      가산점여부: row.신청인원합계 > threshold ? `+${bonus}` : '없음',
+      비고: row.신청인원합계 > threshold ? `${threshold}명 초과` : `${threshold}명 이하`,
+    })).sort((a,b) => b.신청인원합계 - a.신청인원합계);
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detail), '파일별결과');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), '기관별합산');
+    XLSX.writeFile(wb, `사단법인도구_신청서집계_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  function setFiles(fileList) {
+    state.files = [...fileList];
+    els.statFiles.textContent = String(state.files.length);
+    els.summaryText.textContent = state.files.length
+      ? `${state.files.length}개 파일이 준비되었습니다. ‘집계 시작’을 눌러 주세요.`
+      : '아직 파일이 업로드되지 않았습니다.';
+    log(`${state.files.length}개 파일이 업로드 대기 상태입니다.`);
+  }
+
+  function loadSample() {
+    state.files = [];
+    state.results = [
+      { fileName:'강북행복복지관_1.hwpx', fileType:'HWPX', orgName:'강북행복복지관', applicantCount:12, status:'인식 완료', issues:'' },
+      { fileName:'강북행복복지관_2.pdf', fileType:'PDF', orgName:'강북행복복지관', applicantCount:11, status:'인식 완료', issues:'' },
+      { fileName:'강북행복복지관_3.jpg', fileType:'이미지', orgName:'강북행복복지관', applicantCount:10, status:'인식 완료', issues:'' },
+      { fileName:'새싹지역아동센터.hwp', fileType:'HWP', orgName:'새싹지역아동센터', applicantCount:18, status:'인식 완료', issues:'' },
+      { fileName:'다정청소년센터.pdf', fileType:'PDF', orgName:'다정청소년센터', applicantCount:9, status:'인식 완료', issues:'' },
+      { fileName:'검토필요_01.hwp', fileType:'HWP', orgName:'', applicantCount:null, status:'검토 필요', issues:'HWP 파싱 실패' },
+    ];
+    render(state.results);
+    setStatus('샘플 표시');
+    els.summaryText.textContent = '샘플 데이터가 표시되었습니다. 실제 파일 업로드로 바로 바꿀 수 있습니다.';
+  }
+
+  els.pickBtn.addEventListener('click', () => els.fileInput.click());
+  els.fileInput.addEventListener('change', (e) => setFiles(e.target.files));
+  els.analyzeBtn.addEventListener('click', analyze);
+  els.downloadBtn.addEventListener('click', downloadExcel);
+  els.sampleBtn.addEventListener('click', loadSample);
+  els.threshold.addEventListener('input', () => state.results.length && render(state.results));
+  els.bonus.addEventListener('input', () => state.results.length && render(state.results));
+
+  ['dragenter','dragover'].forEach(evt => {
+    els.dropzone.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); els.dropzone.classList.add('drag'); });
+  });
+  ['dragleave','drop'].forEach(evt => {
+    els.dropzone.addEventListener(evt, (e) => { e.preventDefault(); e.stopPropagation(); els.dropzone.classList.remove('drag'); });
+  });
+  els.dropzone.addEventListener('drop', (e) => setFiles(e.dataTransfer.files));
+
+  log('업로드 대기 중');
+</script>
+</body>
+</html>
